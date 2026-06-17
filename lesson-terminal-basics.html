@@ -1,0 +1,252 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Lesson — Reading the Terminal Before You Use It</title>
+<style>
+  :root {
+    --bg: #0D1117;
+    --bg-panel: #131A22;
+    --bg-raised: #1A2230;
+    --bg-input: #0B1016;
+    --paper: #E8E6DD;
+    --paper-dim: #A9A89E;
+    --amber: #C2914B;
+    --amber-dim: #8A6A3A;
+    --slate: #5B7C99;
+    --slate-dim: #3F5A70;
+    --green: #6E9B6E;
+    --red: #B8453D;
+    --line: #2A3441;
+    --mono: 'JetBrains Mono', 'SF Mono', Consolas, monospace;
+    --sans: 'Inter', -apple-system, sans-serif;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--bg); color: var(--paper); font-family: var(--sans); line-height: 1.65; -webkit-font-smoothing: antialiased; }
+  .wrap { max-width: 920px; margin: 0 auto; padding: 0 24px 140px; }
+
+  header { padding: 56px 0 36px; border-bottom: 1px solid var(--line); margin-bottom: 44px; }
+  .eyebrow {
+    font-family: var(--mono); font-size: 12px; letter-spacing: 0.12em; text-transform: uppercase;
+    color: var(--amber); margin-bottom: 16px; display: flex; align-items: center; gap: 10px;
+  }
+  .eyebrow::before { content: ''; width: 8px; height: 8px; background: var(--amber); display: inline-block; border-radius: 1px; }
+  h1 { font-size: clamp(26px, 4vw, 40px); font-weight: 700; letter-spacing: -0.01em; max-width: 760px; margin-bottom: 14px; }
+  .hero-sub { color: var(--paper-dim); font-size: 15.5px; max-width: 640px; }
+
+  section { margin-bottom: 52px; }
+  .section-head { display: flex; align-items: baseline; gap: 14px; margin-bottom: 8px; flex-wrap: wrap; }
+  .section-num {
+    font-family: var(--mono); font-size: 13px; color: var(--amber-dim);
+    background: rgba(194,145,75,0.08); border: 1px solid var(--amber-dim); padding: 2px 8px; border-radius: 3px;
+  }
+  h2 { font-size: 21px; font-weight: 600; }
+  h3 { font-size: 15px; font-weight: 600; margin-bottom: 8px; }
+  .section-intro { color: var(--paper-dim); font-size: 14.5px; max-width: 680px; margin: 12px 0 22px; }
+  p.body-text { font-size: 14.5px; color: var(--paper-dim); margin-bottom: 14px; max-width: 680px; }
+  p.body-text b { color: var(--paper); }
+  p.body-text code { font-family: var(--mono); font-size: 13px; background: var(--bg-raised); padding: 1px 6px; border-radius: 3px; color: var(--amber); }
+
+  /* anatomy diagram for a command */
+  .anatomy {
+    background: var(--bg-panel); border: 1px solid var(--line); border-radius: 8px;
+    padding: 28px 24px 20px; margin-bottom: 24px; overflow-x: auto;
+  }
+  .anatomy-cmd {
+    font-family: var(--mono); font-size: 18px; white-space: pre; display: flex; gap: 0; margin-bottom: 18px;
+  }
+  .anatomy-cmd .part { padding: 2px 4px; border-radius: 3px; position: relative; }
+  .anatomy-cmd .part.prog { color: var(--amber); }
+  .anatomy-cmd .part.flag { color: var(--slate); }
+  .anatomy-cmd .part.arg { color: var(--green); }
+  .anatomy-cmd .part.pipe { color: var(--paper-dim); }
+  .anatomy-legend { display: flex; gap: 20px; flex-wrap: wrap; font-family: var(--mono); font-size: 12px; }
+  .anatomy-legend .item { display: flex; align-items: center; gap: 6px; color: var(--paper-dim); }
+  .anatomy-legend .swatch { width: 10px; height: 10px; border-radius: 2px; }
+  .swatch.prog { background: var(--amber); } .swatch.flag { background: var(--slate); } .swatch.arg { background: var(--green); } .swatch.pipe { background: var(--paper-dim); }
+
+  /* concept cards */
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 14px; }
+  .card { background: var(--bg-panel); border: 1px solid var(--line); border-radius: 8px; padding: 18px 20px; }
+  .card h3 { display: flex; align-items: center; gap: 8px; }
+  .dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
+  .dot.amber { background: var(--amber); } .dot.slate { background: var(--slate); } .dot.green { background: var(--green); }
+  .card p { font-size: 13.5px; color: var(--paper-dim); }
+  .card code { font-family: var(--mono); font-size: 12.5px; background: var(--bg-raised); padding: 1px 6px; border-radius: 3px; color: var(--amber); }
+
+  /* tool-purpose table */
+  table { width: 100%; border-collapse: collapse; font-size: 13.5px; margin-top: 6px; }
+  th { text-align: left; font-family: var(--mono); font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--slate); padding: 10px 14px; border-bottom: 1px solid var(--line); }
+  td { padding: 12px 14px; border-bottom: 1px solid var(--line); color: var(--paper-dim); vertical-align: top; }
+  td:first-child { color: var(--amber); font-family: var(--mono); font-size: 13px; white-space: nowrap; }
+  tr:last-child td { border-bottom: none; }
+
+  /* terminal mock */
+  .term {
+    background: var(--bg-input); border: 1px solid var(--line); border-radius: 8px; overflow: hidden; margin-bottom: 20px;
+  }
+  .term-bar { padding: 10px 16px; background: var(--bg-panel); border-bottom: 1px solid var(--line); display: flex; gap: 8px; align-items: center; }
+  .term-dot { width: 9px; height: 9px; border-radius: 50%; }
+  .term-dot.r { background: #C25450; } .term-dot.y { background: #C2914B; } .term-dot.g { background: #6E9B6E; }
+  .term-body { padding: 16px 18px; font-family: var(--mono); font-size: 13px; }
+  .term-line { margin-bottom: 4px; white-space: pre-wrap; word-break: break-all; }
+  .term-line .prompt { color: var(--slate); }
+  .term-line .cmd { color: var(--amber); }
+  .term-line.out { color: var(--paper-dim); }
+  .term-line .comment { color: var(--slate-dim); }
+
+  .step-list { background: var(--bg-panel); border: 1px solid var(--line); border-radius: 8px; padding: 4px; margin-bottom: 4px; }
+  .step { display: flex; gap: 14px; padding: 14px 16px; }
+  .step:not(:last-child) { border-bottom: 1px solid var(--line); }
+  .stepnum { font-family: var(--mono); color: var(--amber-dim); font-size: 13px; flex-shrink: 0; }
+  .steptext { font-size: 13.5px; color: var(--paper-dim); }
+  .steptext b { color: var(--paper); }
+  .steptext code { font-family: var(--mono); font-size: 12.5px; background: var(--bg-raised); padding: 1px 6px; border-radius: 3px; color: var(--amber); }
+
+  .cta-bar {
+    margin-top: 64px; padding: 28px 26px; background: var(--bg-panel); border: 1px solid var(--amber-dim);
+    border-radius: 10px; display: flex; gap: 20px; align-items: center; justify-content: space-between; flex-wrap: wrap;
+  }
+  .cta-text h3 { font-size: 16px; margin-bottom: 4px; }
+  .cta-text p { font-size: 13.5px; color: var(--paper-dim); }
+  .cta-link {
+    font-family: var(--mono); font-size: 13px; background: rgba(194,145,75,0.12); color: var(--amber);
+    border: 1px solid var(--amber-dim); padding: 11px 20px; border-radius: 6px; text-decoration: none;
+    white-space: nowrap; transition: all 0.15s;
+  }
+  .cta-link:hover { background: rgba(194,145,75,0.2); }
+
+  .scope-note {
+    margin-top: 50px; padding: 18px 22px; border-left: 3px solid var(--slate-dim);
+    background: var(--bg-panel); border-radius: 0 8px 8px 0; font-size: 13px; color: var(--paper-dim);
+  }
+  .scope-note b { color: var(--paper); }
+
+  ::selection { background: var(--amber-dim); color: var(--paper); }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <div class="eyebrow">Module 2 — Lesson</div>
+    <h1>Before you type a single command, know what you're typing</h1>
+    <p class="hero-sub">A quick primer on shell basics and what each tool category is actually doing, so the walkthrough worksheet isn't just copy-paste — you'll know why each command exists and what its output is telling you.</p>
+  </header>
+
+  <!-- ============ TERMINAL BASICS ============ -->
+  <section>
+    <div class="section-head"><span class="section-num">01</span><h2>Reading a command before you run it</h2></div>
+    <p class="section-intro">Every command you'll type in this module follows the same basic shape. Once you can read this shape, unfamiliar commands stop being scary — you can usually guess roughly what they do.</p>
+
+    <div class="anatomy">
+      <div class="anatomy-cmd">
+        <span class="part prog">strings</span><span class="part pipe"> </span><span class="part flag">-el</span><span class="part pipe"> </span><span class="part arg">beacon.exe</span><span class="part pipe"> | </span><span class="part prog">less</span>
+      </div>
+      <div class="anatomy-legend">
+        <div class="item"><span class="swatch prog"></span>program being run</div>
+        <div class="item"><span class="swatch flag"></span>flag / option (changes behavior)</div>
+        <div class="item"><span class="swatch arg"></span>argument (what it acts on)</div>
+        <div class="item"><span class="swatch pipe"></span>pipe — sends output of one program into another</div>
+      </div>
+    </div>
+
+    <div class="grid">
+      <div class="card">
+        <h3><span class="dot amber"></span>The program</h3>
+        <p>The first word is always the program being executed — <code>strings</code>, <code>file</code>, <code>peframe</code>. If you're not sure what a program does, <code>man strings</code> opens its manual page, and <code>strings --help</code> usually gives a quicker summary.</p>
+      </div>
+      <div class="card">
+        <h3><span class="dot slate"></span>Flags / options</h3>
+        <p>Anything starting with <code>-</code> or <code>--</code> changes how the program behaves without changing what it acts on. <code>-e</code> and <code>l</code> combined as <code>-el</code> tells <code>strings</code> to extract little-endian wide-character text specifically.</p>
+      </div>
+      <div class="card">
+        <h3><span class="dot green"></span>Arguments</h3>
+        <p>Usually the file or target the command acts on. In <code>strings -el beacon.exe</code>, the file is the argument — without it, most tools either wait for input or do nothing.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ PIPES AND REDIRECTION ============ -->
+  <section>
+    <div class="section-head"><span class="section-num">02</span><h2>The pipe — chaining tools together</h2></div>
+    <p class="section-intro">The single most useful symbol in the terminal is <code style="font-family:var(--mono);background:var(--bg-raised);padding:1px 6px;border-radius:3px;color:var(--amber);">|</code> — it takes the output of the command on the left and feeds it as input to the command on the right.</p>
+
+    <div class="term">
+      <div class="term-bar"><span class="term-dot r"></span><span class="term-dot y"></span><span class="term-dot g"></span></div>
+      <div class="term-body">
+        <div class="term-line"><span class="prompt">$</span> <span class="cmd">strings beacon.exe</span> <span class="comment"># dumps every printable string — could be thousands of lines</span></div>
+        <div class="term-line out">KERNEL32.dll</div>
+        <div class="term-line out">VirtualAlloc</div>
+        <div class="term-line out">... (hundreds more lines scroll past instantly)</div>
+        <div class="term-line"><span class="prompt">$</span> <span class="cmd">strings beacon.exe | less</span> <span class="comment"># same output, but paged so you can scroll it</span></div>
+        <div class="term-line"><span class="prompt">$</span> <span class="cmd">strings beacon.exe | grep -i "kernel"</span> <span class="comment"># filters to only lines containing "kernel"</span></div>
+      </div>
+    </div>
+
+    <p class="body-text">Three commands worth knowing well: <b>less</b> turns a wall of output into something scrollable (press <code>q</code> to quit, <code>/</code> to search forward). <b>grep</b> filters lines matching a pattern — <code>grep -i</code> makes the match case-insensitive. <b>head</b> and <b>tail</b> show just the first or last N lines, useful when you only need a quick peek.</p>
+  </section>
+
+  <!-- ============ SUDO / PERMISSIONS ============ -->
+  <section>
+    <div class="section-head"><span class="section-num">03</span><h2>sudo and why some tools need it</h2></div>
+    <p class="body-text">Most of the analysis commands in this module (<code>file</code>, <code>strings</code>, <code>peframe</code>, <code>exiftool</code>) just <b>read</b> a file you already own, so they don't need elevated privileges. You'll occasionally see <code>sudo</code> in front of a command elsewhere in Kali — it means "run this one command as the root/administrator user." Use it only when a tool specifically requires it (usually anything touching network interfaces or installing packages), not as a default habit.</p>
+  </section>
+
+  <!-- ============ TOOL PURPOSE TABLE ============ -->
+  <section>
+    <div class="section-head"><span class="section-num">04</span><h2>What each tool category is actually for</h2></div>
+    <p class="section-intro">Before running the worksheet commands, it helps to know which question each tool is answering. None of these tools "detect malware" by themselves — they each surface one type of evidence, and you combine them.</p>
+
+    <table>
+      <thead><tr><th>Tool</th><th>Question it answers</th><th>What it can't tell you</th></tr></thead>
+      <tbody>
+        <tr><td>sha256sum</td><td>What is this file's unique fingerprint?</td><td>Nothing about content or behavior — purely an identity check.</td></tr>
+        <tr><td>file</td><td>What format/architecture is this file?</td><td>Nothing about whether it's malicious — a PE file is just a PE file.</td></tr>
+        <tr><td>exiftool</td><td>What metadata did the build process leave behind?</td><td>Absence of metadata is suspicious but not proof of anything on its own.</td></tr>
+        <tr><td>strings</td><td>What readable text is embedded in the file?</td><td>Encoded/encrypted content won't show up as readable text at all.</td></tr>
+        <tr><td>peframe</td><td>What do the PE structure, sections, and imports look like?</td><td>It flags patterns — it doesn't confirm intent, you still verify manually.</td></tr>
+        <tr><td>binwalk -E</td><td>Where in the file is randomness concentrated?</td><td>High entropy means "could be encoded/compressed," not "is malicious."</td></tr>
+        <tr><td>VirusTotal</td><td>Have other engines/analysts seen this exact file before?</td><td>A new, never-seen file will show no matches even if it's harmful.</td></tr>
+        <tr><td>Joe Sandbox</td><td>What does this file actually do when executed?</td><td>Sandbox-aware malware may behave differently than it would on a real target.</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <!-- ============ WALKTHROUGH OF FIRST FEW COMMANDS ============ -->
+  <section>
+    <div class="section-head"><span class="section-num">05</span><h2>Your very first three commands, narrated</h2></div>
+    <p class="section-intro">This is the exact sequence you'll type at the start of the worksheet, slowed down so you can see what's happening at each keystroke.</p>
+
+    <div class="step-list">
+      <div class="step">
+        <span class="stepnum">1</span>
+        <span class="steptext"><b>Navigate to where your file actually is.</b> <code>cd ~/Desktop</code> (or wherever you saved it) changes your current directory. Run <code>ls</code> afterward to confirm <code>beacon.exe</code> is actually listed — if it's not there, the next commands will fail with "No such file or directory."</span>
+      </div>
+      <div class="step">
+        <span class="stepnum">2</span>
+        <span class="steptext"><b>Hash it.</b> <code>sha256sum beacon.exe</code> reads every byte of the file and produces a 64-character hex string. This runs instantly for a small file. Copy this value somewhere safe immediately — you'll reuse it in the VirusTotal stage.</span>
+      </div>
+      <div class="step">
+        <span class="stepnum">3</span>
+        <span class="steptext"><b>Identify the format.</b> <code>file beacon.exe</code> reads just the first few bytes (the header) rather than the whole file, which is why it returns instantly even on large files. It's comparing those header bytes against a known database of file signatures (called "magic numbers") to guess the format.</span>
+      </div>
+    </div>
+  </section>
+
+  <div class="cta-bar">
+    <div class="cta-text">
+      <h3>Ready to run them yourself</h3>
+      <p>Open the worksheet and work through Stage 1 — Linux analysis — recording your real output as you go.</p>
+    </div>
+    <a class="cta-link" href="analysis-walkthrough.html">Open the worksheet →</a>
+  </div>
+
+  <div class="scope-note">
+    <b>Lab scope reminder:</b> Practice these commands only against your own self-generated, non-functional lab sample, inside an isolated VM with no real network reachability.
+  </div>
+
+</div>
+</body>
+</html>

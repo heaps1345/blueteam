@@ -1,0 +1,467 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Sample Analysis Walkthrough — Linux, VirusTotal, Joe Sandbox</title>
+<style>
+  :root {
+    --bg: #0D1117;
+    --bg-panel: #131A22;
+    --bg-raised: #1A2230;
+    --bg-input: #0B1016;
+    --paper: #E8E6DD;
+    --paper-dim: #A9A89E;
+    --amber: #C2914B;
+    --amber-dim: #8A6A3A;
+    --slate: #5B7C99;
+    --slate-dim: #3F5A70;
+    --green: #6E9B6E;
+    --red: #B8453D;
+    --line: #2A3441;
+    --mono: 'JetBrains Mono', 'SF Mono', Consolas, monospace;
+    --sans: 'Inter', -apple-system, sans-serif;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: var(--bg);
+    color: var(--paper);
+    font-family: var(--sans);
+    line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
+  }
+  .wrap { max-width: 980px; margin: 0 auto; padding: 0 24px 140px; }
+
+  header {
+    padding: 56px 0 36px;
+    border-bottom: 1px solid var(--line);
+    margin-bottom: 44px;
+  }
+  .eyebrow {
+    font-family: var(--mono); font-size: 12px; letter-spacing: 0.12em;
+    text-transform: uppercase; color: var(--amber); margin-bottom: 16px;
+    display: flex; align-items: center; gap: 10px;
+  }
+  .eyebrow::before { content: ''; width: 8px; height: 8px; background: var(--amber); display: inline-block; border-radius: 1px; }
+  h1 { font-size: clamp(26px, 4vw, 40px); font-weight: 700; letter-spacing: -0.01em; max-width: 760px; margin-bottom: 14px; }
+  .hero-sub { color: var(--paper-dim); font-size: 15.5px; max-width: 640px; }
+
+  .progress-bar {
+    margin-top: 28px; display: flex; gap: 4px; align-items: center;
+    font-family: var(--mono); font-size: 12px; color: var(--slate);
+  }
+  .progress-track {
+    flex: 1; height: 6px; background: var(--bg-panel); border-radius: 3px; overflow: hidden; border: 1px solid var(--line);
+  }
+  .progress-fill { height: 100%; background: var(--amber-dim); width: 0%; transition: width 0.3s; }
+
+  section { margin-bottom: 56px; }
+  .stage-tag {
+    display: inline-block; font-family: var(--mono); font-size: 11px; letter-spacing: 0.06em;
+    text-transform: uppercase; padding: 4px 10px; border-radius: 4px; margin-bottom: 14px;
+  }
+  .stage-tag.linux { background: rgba(91,124,153,0.12); color: var(--slate); border: 1px solid var(--slate-dim); }
+  .stage-tag.vt { background: rgba(194,145,75,0.1); color: var(--amber); border: 1px solid var(--amber-dim); }
+  .stage-tag.joe { background: rgba(110,155,110,0.1); color: var(--green); border: 1px solid #3F5A40; }
+
+  .section-head { display: flex; align-items: baseline; gap: 14px; margin-bottom: 8px; flex-wrap: wrap; }
+  .section-num {
+    font-family: var(--mono); font-size: 13px; color: var(--amber-dim);
+    background: rgba(194,145,75,0.08); border: 1px solid var(--amber-dim); padding: 2px 8px; border-radius: 3px;
+  }
+  h2 { font-size: 21px; font-weight: 600; }
+  .section-intro { color: var(--paper-dim); font-size: 14.5px; max-width: 680px; margin: 12px 0 22px; }
+
+  /* command block */
+  .cmdblock {
+    background: var(--bg-panel); border: 1px solid var(--line); border-radius: 8px;
+    margin-bottom: 18px; overflow: hidden;
+  }
+  .cmdline {
+    font-family: var(--mono); font-size: 13.5px; padding: 14px 18px;
+    background: var(--bg-input); color: var(--paper); display: flex; gap: 10px; align-items: baseline;
+    border-bottom: 1px solid var(--line);
+  }
+  .cmdline .prompt { color: var(--slate); flex-shrink: 0; }
+  .cmdline .cmdtext { color: var(--amber); word-break: break-all; }
+  .cmdwhy { padding: 14px 18px; font-size: 13.5px; color: var(--paper-dim); }
+  .cmdwhy b { color: var(--paper); }
+  .cmdwhy code { font-family: var(--mono); font-size: 12.5px; background: var(--bg-raised); padding: 1px 6px; border-radius: 3px; color: var(--amber); }
+
+  /* answer field */
+  .field {
+    margin-top: 4px; padding: 14px 18px; border-top: 1px dashed var(--line);
+  }
+  .field label {
+    display: block; font-family: var(--mono); font-size: 11px; text-transform: uppercase;
+    letter-spacing: 0.06em; color: var(--slate); margin-bottom: 8px;
+  }
+  .field input[type="text"], .field textarea {
+    width: 100%; background: var(--bg-input); border: 1px solid var(--line); border-radius: 5px;
+    color: var(--paper); font-family: var(--mono); font-size: 13px; padding: 10px 12px;
+    resize: vertical; transition: border-color 0.15s;
+  }
+  .field input[type="text"]:focus, .field textarea:focus { outline: none; border-color: var(--amber-dim); }
+  .field textarea { min-height: 64px; }
+  .field .saved-tick {
+    font-size: 11px; color: var(--green); font-family: var(--mono); margin-top: 6px; height: 14px; opacity: 0; transition: opacity 0.3s;
+  }
+  .field .saved-tick.show { opacity: 1; }
+
+  /* multi-field row */
+  .field-row { display: grid; grid-template-columns: 1fr; gap: 12px; }
+  @media (min-width: 640px) { .field-row.two { grid-template-columns: 1fr 1fr; } }
+
+  /* info cards for VT / Joe Sandbox guidance */
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 14px; margin-bottom: 22px; }
+  .card { background: var(--bg-panel); border: 1px solid var(--line); border-radius: 8px; padding: 16px 18px; }
+  .card h3 { font-size: 13.5px; font-weight: 600; margin-bottom: 8px; display: flex; align-items: center; gap: 8px; }
+  .dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
+  .dot.amber { background: var(--amber); } .dot.slate { background: var(--slate); } .dot.green { background: var(--green); } .dot.red { background: var(--red); }
+  .card p { font-size: 13px; color: var(--paper-dim); }
+
+  .step-list { background: var(--bg-panel); border: 1px solid var(--line); border-radius: 8px; padding: 4px; margin-bottom: 20px; }
+  .step { display: flex; gap: 14px; padding: 14px 16px; }
+  .step:not(:last-child) { border-bottom: 1px solid var(--line); }
+  .stepnum { font-family: var(--mono); color: var(--amber-dim); font-size: 13px; flex-shrink: 0; }
+  .steptext { font-size: 13.5px; color: var(--paper-dim); }
+  .steptext b { color: var(--paper); }
+  .steptext a { color: var(--slate); text-decoration: underline; }
+
+  .warn-note {
+    margin-top: 6px; padding: 14px 18px; border-left: 3px solid var(--red); background: rgba(184,69,61,0.06);
+    border-radius: 0 6px 6px 0; font-size: 13px; color: var(--paper-dim);
+  }
+  .warn-note b { color: var(--paper); }
+
+  .scope-note {
+    margin-top: 70px; padding: 18px 22px; border-left: 3px solid var(--slate-dim);
+    background: var(--bg-panel); border-radius: 0 8px 8px 0; font-size: 13px; color: var(--paper-dim);
+  }
+  .scope-note b { color: var(--paper); }
+
+  .export-bar {
+    position: sticky; bottom: 0; margin-top: 40px; padding: 16px 20px;
+    background: var(--bg-panel); border: 1px solid var(--line); border-radius: 8px;
+    display: flex; gap: 12px; align-items: center; flex-wrap: wrap; justify-content: space-between;
+  }
+  .export-bar .label { font-size: 13px; color: var(--paper-dim); }
+  .btn {
+    font-family: var(--mono); font-size: 12.5px; background: var(--bg-raised); color: var(--paper);
+    border: 1px solid var(--line); padding: 9px 16px; border-radius: 5px; cursor: pointer; transition: all 0.15s;
+  }
+  .btn:hover { border-color: var(--amber-dim); color: var(--amber); }
+  .btn.primary { background: rgba(194,145,75,0.1); border-color: var(--amber-dim); color: var(--amber); }
+
+  ::selection { background: var(--amber-dim); color: var(--paper); }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <div class="eyebrow">Module 2 — Dynamic-Adjacent Triage</div>
+    <h1>Run it, hash it, check it, sandbox it</h1>
+    <p class="hero-sub">A command-by-command walkthrough across three stages — local Linux tooling, VirusTotal, and Joe Sandbox — with fields for your own results. Everything autosaves in this browser as you type.</p>
+    <div class="progress-bar">
+      <span id="progress-label">0 / 0 fields completed</span>
+      <div class="progress-track"><div class="progress-fill" id="progress-fill"></div></div>
+    </div>
+  </header>
+
+  <!-- ===================== STAGE 1: LINUX ===================== -->
+  <section>
+    <div class="stage-tag linux">Stage 1 — Local Linux Analysis</div>
+    <div class="section-head"><span class="section-num">01</span><h2>Hashing and file identification</h2></div>
+    <p class="section-intro">Always hash before anything else. The hash is what you'll search against VirusTotal, and it's your proof that the file didn't change across every later step.</p>
+
+    <div class="cmdblock">
+      <div class="cmdline"><span class="prompt">$</span><span class="cmdtext">sha256sum beacon.exe</span></div>
+      <div class="cmdwhy">Produces a unique fingerprint of the exact file contents. This is the value you paste into VirusTotal's search bar — VT indexes by hash, not filename, so two people calling their file something different will still match if the bytes are identical.</div>
+      <div class="field">
+        <label for="f-sha256">Your SHA256 result</label>
+        <input type="text" id="f-sha256" data-field="sha256" placeholder="paste the hash here">
+        <div class="saved-tick" id="tick-sha256">saved</div>
+      </div>
+    </div>
+
+    <div class="cmdblock">
+      <div class="cmdline"><span class="prompt">$</span><span class="cmdtext">file beacon.exe</span></div>
+      <div class="cmdwhy">Confirms the file format by checking the actual header bytes rather than trusting the file extension. For a PE binary it'll report the architecture (x86 vs x64), whether it's a GUI or console app, and whether it's statically or dynamically linked.</div>
+      <div class="field">
+        <label for="f-file">Output of `file`</label>
+        <textarea id="f-file" data-field="file_output" placeholder="e.g. PE32 executable (console) Intel 80386, for MS Windows"></textarea>
+        <div class="saved-tick" id="tick-file_output">saved</div>
+      </div>
+    </div>
+
+    <div class="cmdblock">
+      <div class="cmdline"><span class="prompt">$</span><span class="cmdtext">exiftool beacon.exe</span></div>
+      <div class="cmdwhy">Pulls any embedded metadata — compile timestamp, version info, company/product strings. For generated payloads this is frequently sparse or absent, which is itself a finding worth recording rather than skipping.</div>
+      <div class="field">
+        <label for="f-exif">Notable metadata fields (or "none present")</label>
+        <textarea id="f-exif" data-field="exif" placeholder="company name / product name / compile timestamp..."></textarea>
+        <div class="saved-tick" id="tick-exif">saved</div>
+      </div>
+    </div>
+
+    <div class="section-head" style="margin-top:36px;"><span class="section-num">02</span><h2>Strings and embedded indicators</h2></div>
+    <p class="section-intro">Windows binaries store a lot of text as UTF-16LE (wide chars), which plain <code style="font-family:var(--mono);color:var(--amber);background:var(--bg-raised);padding:1px 6px;border-radius:3px;">strings</code> misses by default. Run both passes.</p>
+
+    <div class="cmdblock">
+      <div class="cmdline"><span class="prompt">$</span><span class="cmdtext">strings beacon.exe | less</span></div>
+      <div class="cmdwhy">Extracts printable ASCII sequences. Look for DLL names, function names if unencoded, and anything resembling a URL, IP, or port — even partial fragments can be telling.</div>
+    </div>
+
+    <div class="cmdblock">
+      <div class="cmdline"><span class="prompt">$</span><span class="cmdtext">strings -el beacon.exe | less</span></div>
+      <div class="cmdwhy">The <code>-el</code> flag extracts little-endian wide-character (UTF-16LE) strings — the encoding most native Windows API text actually uses. Skipping this pass is the single most common reason students think a binary has "no strings."</div>
+      <div class="field">
+        <label for="f-strings">Any IPs, ports, URLs, or framework-identifying strings found</label>
+        <textarea id="f-strings" data-field="strings_findings" placeholder="list anything notable found in either pass"></textarea>
+        <div class="saved-tick" id="tick-strings_findings">saved</div>
+      </div>
+    </div>
+
+    <div class="section-head" style="margin-top:36px;"><span class="section-num">03</span><h2>Static structure — sections, imports, entropy</h2></div>
+    <p class="section-intro">This is where <code style="font-family:var(--mono);color:var(--amber);background:var(--bg-raised);padding:1px 6px;border-radius:3px;">peframe</code> earns its place — it automates most of what you'd otherwise do by hand across several tools.</p>
+
+    <div class="cmdblock">
+      <div class="cmdline"><span class="prompt">$</span><span class="cmdtext">peframe beacon.exe</span></div>
+      <div class="cmdwhy">Reports sections with entropy, suspicious imported API calls, packer signatures, and any obvious indicators in one pass. Treat its "suspicious" flags as a checklist to verify manually, not a verdict on their own.</div>
+      <div class="field-row two">
+        <div class="field">
+          <label for="f-sections">Sections listed + entropy values</label>
+          <textarea id="f-sections" data-field="sections" placeholder=".text 6.8 / .rdata 4.1 / .rsrc 7.9 ..."></textarea>
+          <div class="saved-tick" id="tick-sections">saved</div>
+        </div>
+        <div class="field">
+          <label for="f-flagged">APIs / behaviors peframe flagged</label>
+          <textarea id="f-flagged" data-field="flagged_apis" placeholder="e.g. VirtualAlloc, WSAStartup, CreateThread"></textarea>
+          <div class="saved-tick" id="tick-flagged_apis">saved</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="cmdblock">
+      <div class="cmdline"><span class="prompt">$</span><span class="cmdtext">objdump -p beacon.exe | grep -A50 "DLL Name"</span></div>
+      <div class="cmdwhy">A no-extra-install way to dump the import table directly. Cross-check this against peframe's flagged list — seeing it from two angles helps you trust the finding.</div>
+      <div class="field">
+        <label for="f-imports">DLLs / functions imported</label>
+        <textarea id="f-imports" data-field="imports" placeholder="KERNEL32.dll: VirtualAlloc, ..."></textarea>
+        <div class="saved-tick" id="tick-imports">saved</div>
+      </div>
+    </div>
+
+    <div class="cmdblock">
+      <div class="cmdline"><span class="prompt">$</span><span class="cmdtext">binwalk -E beacon.exe</span></div>
+      <div class="cmdwhy">Renders an entropy graph across the whole file. A flat low region followed by a sharp spike close to the maximum is the visual signature of encoded/compressed payload content sitting inside an otherwise normal-looking executable.</div>
+      <div class="field">
+        <label for="f-entropy-shape">Describe the entropy graph shape</label>
+        <input type="text" id="f-entropy-shape" data-field="entropy_shape" placeholder="e.g. flat until offset X, sharp spike to ~7.9 in final section">
+        <div class="saved-tick" id="tick-entropy_shape">saved</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===================== STAGE 2: VIRUSTOTAL ===================== -->
+  <section>
+    <div class="stage-tag vt">Stage 2 — VirusTotal</div>
+    <div class="section-head"><span class="section-num">04</span><h2>Submitting the hash, not the file</h2></div>
+    <p class="section-intro">Always search by hash first. Uploading the actual file is sometimes unnecessary and means the sample becomes visible to every VT customer afterward — worth knowing before you do it with anything sensitive.</p>
+
+    <div class="step-list">
+      <div class="step"><span class="stepnum">1</span><span class="steptext">Go to <a href="https://www.virustotal.com" target="_blank" rel="noopener">virustotal.com</a> and paste your SHA256 hash into the search bar.</span></div>
+      <div class="step"><span class="stepnum">2</span><span class="steptext">If it returns "no matches found," that just means nobody has submitted this exact binary before — for a freshly self-generated lab sample with unique build artifacts, this is expected and not unusual.</span></div>
+      <div class="step"><span class="stepnum">3</span><span class="steptext">If you want a result for class purposes, you can upload the file directly — only do this with lab-only samples you're comfortable becoming visible on a shared threat intelligence platform.</span></div>
+      <div class="step"><span class="stepnum">4</span><span class="steptext">Once scanned, note the detection ratio (e.g. "34/72") and look at the <b>Details</b> tab for file type, size, and any TRiD/packer identification.</span></div>
+      <div class="step"><span class="stepnum">5</span><span class="steptext">Check the <b>Community</b> and vendor name columns under <b>Detection</b> — compare how different engines label it.</span></div>
+    </div>
+
+    <div class="warn-note"><b>Before uploading anything:</b> confirm with your instructor/institution's policy on submitting samples to third-party platforms, even self-generated ones — some training environments restrict this.</div>
+
+    <div class="cmdblock" style="margin-top:18px;">
+      <div class="field">
+        <label for="f-vt-ratio">Detection ratio (e.g. 34/72)</label>
+        <input type="text" id="f-vt-ratio" data-field="vt_ratio" placeholder="x / y engines">
+        <div class="saved-tick" id="tick-vt_ratio">saved</div>
+      </div>
+      <div class="field">
+        <label for="f-vt-names">Names given by 3–4 different vendors</label>
+        <textarea id="f-vt-names" data-field="vt_names" placeholder="Vendor A: Trojan.Generic / Vendor B: Meterpreter.A / ..."></textarea>
+        <div class="saved-tick" id="tick-vt_names">saved</div>
+      </div>
+      <div class="field">
+        <label for="f-vt-generic">Generic vs. family-specific — which did you see more of, and why might that be?</label>
+        <textarea id="f-vt-generic" data-field="vt_generic" placeholder="your interpretation"></textarea>
+        <div class="saved-tick" id="tick-vt_generic">saved</div>
+      </div>
+    </div>
+
+    <div class="grid" style="margin-top:18px;">
+      <div class="card">
+        <h3><span class="dot amber"></span>Generic detection names</h3>
+        <p>Names like "Trojan.Generic" or "Gen:Variant.Heur" usually mean a vendor's heuristic/behavioral engine flagged a pattern — not that they identified the specific framework. Worth contrasting with named-family hits.</p>
+      </div>
+      <div class="card">
+        <h3><span class="dot slate"></span>Named-family detections</h3>
+        <p>Hits explicitly naming Meterpreter, MSF, or similar mean a vendor has a signature tuned to this exact framework's known stub/structure — common since msfvenom's default templates are extremely well fingerprinted.</p>
+      </div>
+      <div class="card">
+        <h3><span class="dot red"></span>Low detection ratio</h3>
+        <p>A surprisingly low ratio doesn't mean "safe" — it can mean the sample is new/unique enough that signature-based engines haven't matched it yet, which is a good discussion point about the limits of static signature detection.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===================== STAGE 3: JOE SANDBOX ===================== -->
+  <section>
+    <div class="stage-tag joe">Stage 3 — Joe Sandbox</div>
+    <div class="section-head"><span class="section-num">05</span><h2>Behavioral analysis in a sandbox</h2></div>
+    <p class="section-intro">This is where you finally watch the sample run, in an environment built to observe and contain it. Joe Sandbox's free Cloud Basic tier is generally sufficient for a teaching sample.</p>
+
+    <div class="step-list">
+      <div class="step"><span class="stepnum">1</span><span class="steptext">Go to <a href="https://www.joesandbox.com" target="_blank" rel="noopener">joesandbox.com</a> and create or sign into an account.</span></div>
+      <div class="step"><span class="stepnum">2</span><span class="steptext">Choose a Windows analysis environment matching your sample's architecture (x86/x64), and submit the file for analysis.</span></div>
+      <div class="step"><span class="stepnum">3</span><span class="steptext">Once the run completes, open the <b>Behavior Graph</b> first — it visualizes process creation, file writes, and registry activity as a tree, which is the fastest way to get oriented.</span></div>
+      <div class="step"><span class="stepnum">4</span><span class="steptext">Check the <b>Network Behavior</b> tab for any outbound connection attempts — since your LHOST is non-routable, expect a failed/timeout connection attempt rather than a live callback, which is itself worth noting as expected lab behavior.</span></div>
+      <div class="step"><span class="stepnum">5</span><span class="steptext">Review the <b>Signatures</b> tab — Joe Sandbox tags specific behaviors (e.g. "starts servers," "may sleep to evade dynamic analysis," "reads sensitive process memory") with severity scores.</span></div>
+      <div class="step"><span class="stepnum">6</span><span class="steptext">Note the overall <b>threat score</b> and compare it against what static analysis already suggested — did dynamic analysis confirm, add to, or contradict your static findings?</span></div>
+    </div>
+
+    <div class="cmdblock">
+      <div class="field">
+        <label for="f-joe-score">Overall threat score / verdict</label>
+        <input type="text" id="f-joe-score" data-field="joe_score" placeholder="e.g. 76/100, malicious">
+        <div class="saved-tick" id="tick-joe_score">saved</div>
+      </div>
+      <div class="field">
+        <label for="f-joe-network">Network behavior observed</label>
+        <textarea id="f-joe-network" data-field="joe_network" placeholder="connection attempts, ports, protocol..."></textarea>
+        <div class="saved-tick" id="tick-joe_network">saved</div>
+      </div>
+      <div class="field">
+        <label for="f-joe-sigs">Notable signatures flagged (list 3+)</label>
+        <textarea id="f-joe-sigs" data-field="joe_sigs" placeholder="e.g. injects into explorer.exe, ..."></textarea>
+        <div class="saved-tick" id="tick-joe_sigs">saved</div>
+      </div>
+      <div class="field">
+        <label for="f-joe-vs-static">Did the sandbox confirm, extend, or contradict your static findings?</label>
+        <textarea id="f-joe-vs-static" data-field="joe_vs_static" placeholder="your comparison"></textarea>
+        <div class="saved-tick" id="tick-joe_vs_static">saved</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===================== WRAP-UP QUESTIONS ===================== -->
+  <section>
+    <div class="section-head"><span class="section-num">REVIEW</span><h2>Pulling it together</h2></div>
+    <div class="cmdblock">
+      <div class="field">
+        <label for="f-q1">Of the three stages (Linux static, VirusTotal, Joe Sandbox), which gave you the most actionable indicator first, and why?</label>
+        <textarea id="f-q1" data-field="review_q1"></textarea>
+        <div class="saved-tick" id="tick-review_q1">saved</div>
+      </div>
+      <div class="field">
+        <label for="f-q2">If you only had five minutes to triage this file with no internet access, which three commands from Stage 1 would you run, in order?</label>
+        <textarea id="f-q2" data-field="review_q2"></textarea>
+        <div class="saved-tick" id="tick-review_q2">saved</div>
+      </div>
+      <div class="field">
+        <label for="f-q3">Why might a defender care about the difference between a generic detection name and a family-specific one when writing their own detection rules?</label>
+        <textarea id="f-q3" data-field="review_q3"></textarea>
+        <div class="saved-tick" id="tick-review_q3">saved</div>
+      </div>
+    </div>
+  </section>
+
+  <div class="export-bar">
+    <span class="label" id="export-label">Answers autosave to this browser only.</span>
+    <div style="display:flex; gap:10px;">
+      <button class="btn" id="clear-btn">Clear all answers</button>
+      <button class="btn primary" id="export-btn">Export answers as text file</button>
+    </div>
+  </div>
+
+  <div class="scope-note">
+    <b>Lab scope reminder:</b> Run all of this only against your own self-generated, non-functional lab sample, inside an isolated VM with no real network reachability. Uploading any sample to VirusTotal or Joe Sandbox makes it visible to those platforms — only submit material you're authorized and comfortable sharing externally.
+  </div>
+
+</div>
+
+<script>
+  const fields = document.querySelectorAll('[data-field]');
+  const STORAGE_KEY = 'malware_lab_module2_answers';
+
+  function loadAnswers() {
+    let saved = {};
+    try {
+      saved = JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}');
+    } catch (e) { saved = {}; }
+    fields.forEach(f => {
+      if (saved[f.dataset.field] !== undefined) f.value = saved[f.dataset.field];
+    });
+    updateProgress();
+  }
+
+  function saveField(f) {
+    let saved = {};
+    try {
+      saved = JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}');
+    } catch (e) { saved = {}; }
+    saved[f.dataset.field] = f.value;
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(saved));
+    } catch (e) { /* storage unavailable, fail silently */ }
+    const tick = document.getElementById('tick-' + f.dataset.field);
+    if (tick) {
+      tick.classList.add('show');
+      clearTimeout(tick._t);
+      tick._t = setTimeout(() => tick.classList.remove('show'), 1200);
+    }
+    updateProgress();
+  }
+
+  function updateProgress() {
+    const filled = Array.from(fields).filter(f => f.value.trim().length > 0).length;
+    document.getElementById('progress-label').textContent = filled + ' / ' + fields.length + ' fields completed';
+    document.getElementById('progress-fill').style.width = (filled / fields.length * 100) + '%';
+  }
+
+  fields.forEach(f => {
+    f.addEventListener('input', () => saveField(f));
+  });
+
+  document.getElementById('clear-btn').addEventListener('click', () => {
+    if (!confirm('Clear all saved answers? This cannot be undone.')) return;
+    try { localStorage.removeItem(STORAGE_KEY); } catch (e) {}
+    fields.forEach(f => f.value = '');
+    updateProgress();
+  });
+
+  document.getElementById('export-btn').addEventListener('click', () => {
+    let saved = {};
+    try {
+      saved = JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}');
+    } catch (e) { saved = {}; }
+    let out = 'SAMPLE ANALYSIS WALKTHROUGH — RESULTS\n' + '='.repeat(42) + '\n\n';
+    fields.forEach(f => {
+      const label = f.closest('.field').querySelector('label').textContent;
+      out += label + '\n' + (saved[f.dataset.field] || '(blank)') + '\n\n';
+    });
+    const blob = new Blob([out], { type: 'text/plain' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'analysis-results.txt';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  });
+
+  loadAnswers();
+</script>
+
+</body>
+</html>
